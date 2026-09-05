@@ -50,7 +50,22 @@ def run(images_root: Path, config: TrainingConfig, work_dir: Path) -> TrainingRe
     weights = data.class_weights(splits.train, config)
 
     console.rule("[bold]Modelo")
-    backbone, trainer, exporter = arch.build(config)
+
+    # ── Soporte para TPU ──
+    try:
+        import tensorflow as tf
+        tpu = tf.distribute.cluster_resolver.TPUClusterResolver()
+        tf.config.experimental_connect_to_cluster(tpu)
+        tf.tpu.experimental.initialize_tpu_system(tpu)
+        strategy = tf.distribute.TPUStrategy(tpu)
+        console.print(f"[green]✓[/] Usando TPU: {tpu.master()}")
+    except ValueError:
+        import tensorflow as tf
+        strategy = tf.distribute.get_strategy()
+
+    with strategy.scope():
+        backbone, trainer, exporter = arch.build(config)
+    
     total = trainer.count_params()
     console.print(
         f"  tronco [bold]{config.section('model', 'backbone')}[/] · "
@@ -64,7 +79,8 @@ def run(images_root: Path, config: TrainingConfig, work_dir: Path) -> TrainingRe
     # ── Etapa 1 ──────────────────────────────────────────────────────────────
     warmup = config.section("training", "warmup")
     console.rule(f"[bold]Etapa 1 · cabeza ({warmup['epochs']} épocas)")
-    arch.compile_for(trainer, config, float(warmup["learning_rate"]))
+    with strategy.scope():
+        arch.compile_for(trainer, config, float(warmup["learning_rate"]))
     stage1 = trainer.fit(
         train_ds,
         validation_data=val_ds,
@@ -85,7 +101,8 @@ def run(images_root: Path, config: TrainingConfig, work_dir: Path) -> TrainingRe
     # Recompilar es obligatorio: sin ello Keras sigue usando el grafo anterior y
     # los pesos recién descongelados no reciben gradiente. El entrenamiento corre
     # sin error y no mejora nada.
-    arch.compile_for(trainer, config, float(finetune["learning_rate"]))
+    with strategy.scope():
+        arch.compile_for(trainer, config, float(finetune["learning_rate"]))
     stage2 = trainer.fit(
         train_ds,
         validation_data=val_ds,
