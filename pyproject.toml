@@ -17,7 +17,6 @@ authors = [{ name = "Diego Fernando Calderón Silva" }]
 # LiteRT del APK produce un .tflite que el teléfono rechaza al abrir — y el
 # síntoma llega en campo, no aquí.
 dependencies = [
-    "tensorflow>=2.16,<2.20",
     "numpy>=1.26,<3",
     "pillow>=10.2",
     "scikit-learn>=1.4",
@@ -30,6 +29,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# En Kaggle la TPU exige el TF pre-instalado con libtpu. NO instalar aquí.
+# En local o Colab: pip install -e ".[tf]"
+tf  = ["tensorflow>=2.16,<2.20"]
 dev = ["pytest>=8.0", "ruff>=0.4", "mypy>=1.9"]
 
 [project.scripts]
