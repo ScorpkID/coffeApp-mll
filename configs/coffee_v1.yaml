@@ -88,18 +88,18 @@ model:
 
 # ── Entrenamiento en dos etapas ──────────────────────────────────────────────
 training:
-  batch_size: 32
+  batch_size: 256
   # Etapa 1 — el tronco congelado, solo aprende la cabeza. Rápido y estable:
   # evita que los gradientes enormes de una cabeza recién inicializada destruyan
   # los pesos preentrenados.
   warmup:
     epochs: 6
-    learning_rate: 0.001
+    learning_rate: 0.004
   # Etapa 2 — se descongela la parte alta del tronco con tasa baja. Es lo que
   # adapta las últimas capas a la textura del café.
   finetune:
     epochs: 14
-    learning_rate: 0.00005
+    learning_rate: 0.0002
     unfreeze_last_layers: 60
   early_stopping_patience: 4
   # Las clases están desbalanceadas 3:1 (18 985 sanas frente a 6 572 de Phoma).
