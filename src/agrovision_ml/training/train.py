@@ -51,17 +51,30 @@ def run(images_root: Path, config: TrainingConfig, work_dir: Path) -> TrainingRe
 
     console.rule("[bold]Modelo")
 
-    # ── Soporte para TPU ──
+    # ── Soporte para TPU ──────────────────────────────────────────────────────
+    # En Kaggle la TPU puede estar ya inicializada desde el notebook.
+    # Si initialize_tpu_system() ya fue llamado, TF lo acepta sin problema.
+    # Capturamos cualquier excepción (no solo ValueError) para no romper
+    # flujos en GPU o CPU.
+    import tensorflow as tf
     try:
-        import tensorflow as tf
         tpu = tf.distribute.cluster_resolver.TPUClusterResolver()
         tf.config.experimental_connect_to_cluster(tpu)
         tf.tpu.experimental.initialize_tpu_system(tpu)
         strategy = tf.distribute.TPUStrategy(tpu)
-        console.print(f"[green]✓[/] Usando TPU: {tpu.master()}")
-    except ValueError:
-        import tensorflow as tf
-        strategy = tf.distribute.get_strategy()
+        n_replicas = strategy.num_replicas_in_sync
+        console.print(
+            f"[green]✓[/] TPU activa · {n_replicas} núcleos · "
+            f"batch global {n_replicas * int(config.section('training', 'batch_size'))} imágenes/paso"
+        )
+    except Exception as _tpu_err:  # noqa: BLE001
+        gpus = tf.config.list_physical_devices("GPU")
+        if gpus:
+            strategy = tf.distribute.MirroredStrategy()
+            console.print(f"[yellow]i[/] Sin TPU ({_tpu_err}) — usando {len(gpus)} GPU(s)")
+        else:
+            strategy = tf.distribute.get_strategy()
+            console.print(f"[yellow]i[/] Sin TPU ni GPU ({_tpu_err}) — CPU (lento)")
 
     with strategy.scope():
         backbone, trainer, exporter = arch.build(config)
